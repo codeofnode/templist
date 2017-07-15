@@ -28,7 +28,7 @@ templist({ "{{greet}}" : { @ : 'getName' } }, { greet : "hello" }, { getName : f
 ```
 
 ## Want more example?
-> See [test file](https://github.com/codeofnode/json2server/blob/master/test.js).
+> See [test file](https://github.com/codeofnode/templist/blob/master/test.js).
 
 ## License
 
