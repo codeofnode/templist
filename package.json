@@ -1,0 +1,25 @@
+{
+  "name": "templist",
+  "version": "0.0.1",
+  "description": "The template master.",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/codeofnode/templist.git"
+  },
+  "scripts": {
+    "test": "node test"
+  },
+  "keywords": [
+    "template",
+    "json",
+    "string",
+    "function",
+    "dynamic"
+  ],
+  "author": "Ramesh Kumar <codeofnode@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/codeofnode/templist/issues"
+  },
+  "homepage": "https://github.com/codeofnode/templist#readme"
+}
