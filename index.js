@@ -40,11 +40,10 @@ var IS_AN = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   return func;
 })();
 var WALK = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
-
-  if (typeof GLOBAL_APP_CONFIG !== 'object' || GLOBAL_APP_CONFIG === null) GLOBAL_APP_CONFIG = {};
+  const maxobjdepth = (GLOBAL_APP_CONFIG && GLOBAL_APP_CONFIG.maxobjdepth) || 99;
 
   const getNested = function(obj, depth) {
-    return ((depth < (GLOBAL_APP_CONFIG.maxobjdepth || 99) && typeof obj === 'object' && obj !== null && obj.$W_END !== true) ? obj : false);
+    return ((depth < maxobjdepth && typeof obj === 'object' && obj !== null && obj.$W_END !== true) ? obj : false);
   };
 
   const walkInto = function(fun, rt, obj, key, depth = 0, isLast = true) {
