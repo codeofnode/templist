@@ -31,24 +31,31 @@ var ASSIGN = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   }
 
   return main;
-})();
+});
 var IS_AN = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   function func(st) {
     return Boolean(!(/[^A-Za-z0-9]/).test(st));
   }
 
   return func;
-})();
+});
 var WALK = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
-  const maxobjdepth = (GLOBAL_APP_CONFIG && GLOBAL_APP_CONFIG.maxobjdepth) || 99;
+  if (typeof GLOBAL_APP_CONFIG !== 'object' || GLOBAL_APP_CONFIG === null) GLOBAL_APP_CONFIG = {};
+  const maxobjdepth = GLOBAL_APP_CONFIG.maxobjdepth || 99;
+  const endvar = GLOBAL_APP_CONFIG.walkendkey || '$W_END';
 
-  const getNested = function(obj, depth) {
-    return ((depth < maxobjdepth && typeof obj === 'object' && obj !== null && obj.$W_END !== true) ? obj : false);
+  let ifEndForObjWalk = GLOBAL_METHODS && GLOBAL_METHODS.ifEndForObjWalk;
+  if (typeof ifEndForObjWalk !== 'function') {
+    ifEndForObjWalk = function(obj, depth) {
+      return ((depth < maxobjdepth && typeof obj === 'object' &&
+        obj !== null && obj[endvar] !== true) ? obj : false);
+    };
   };
 
-  const walkInto = function(fun, rt, obj, key, depth = 0, isLast = true) {
-    fun(obj, key, rt, depth, isLast);
-    const ob = getNested(obj, depth);
+  const walkInto = function(fun, rt, obj, key, depth, isLast) {
+    if (!depth) depth = 0;
+    fun(obj, key, rt, depth || 0, typeof isLast === 'boolean' ? isLast : true);
+    const ob = ifEndForObjWalk(obj, depth);
     if (ob) {
       const kys = Object.keys(ob);
       const lastln = kys.length;
@@ -60,18 +67,20 @@ var WALK = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   };
 
   return walkInto;
-})();
+});
 var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
-
   if (typeof GLOBAL_APP_CONFIG !== 'object' || GLOBAL_APP_CONFIG === null) GLOBAL_APP_CONFIG = {};
 
-  const START_VAR = GLOBAL_APP_CONFIG.startvar || '{{',
-    END_VAR = GLOBAL_APP_CONFIG.endvar || '}}',
+  const START_VAR = GLOBAL_APP_CONFIG.startvar || '\{\{',
+    END_VAR = GLOBAL_APP_CONFIG.endvar || '\}\}',
     SVAR_L = START_VAR.length,
     EVAR_L = END_VAR.length,
+    FUNC_KEY = GLOBAL_APP_CONFIG.functionkey === undefined ? '@' : GLOBAL_APP_CONFIG.functionkey,
     NOT_FOUND_MSG = GLOBAL_APP_CONFIG.notfoundvalue || 'VAR_NOT_FOUND',
-    FUNC_KEY = GLOBAL_APP_CONFIG.functionkey || '@',
-    VAR_REG = GLOBAL_APP_CONFIG.variableregex || /(\{\{[a-zA-Z0-9\$\.\_]+\}\})+/g;
+    VAR_REG = GLOBAL_APP_CONFIG.variableregex ||
+    new RegExp('\(' + START_VAR + '\[a-zA-Z0-9\\$\\.\_\]+' + END_VAR + '\)\+', 'g');
+  FUNC_REG = GLOBAL_APP_CONFIG.functionregex ||
+    new RegExp('\(' + START_VAR + '\[a-zA-Z0-9\_\]+\\(\.\*\?\\)' + END_VAR + '\)\+', 'g');
 
   const WALK_INTO = GLOBAL_METHODS.objwalk,
     IS_ALPHA_NUM = GLOBAL_METHODS.isAlphaNum,
@@ -85,13 +94,29 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
     } else return false;
   }
 
+  function handleFunction(inp, vars, methods) {
+    if (typeof inp === 'object' && inp && FUNC_KEY) {
+      if (typeof methods === 'object' && (typeof inp[FUNC_KEY] === 'string') &&
+        IS_ALPHA_NUM(inp[FUNC_KEY]) && (typeof methods[inp[FUNC_KEY]] === 'function')) {
+        var pms = (typeof inp.params === 'object' && inp.params !== null) ? ASSIGN(false, inp.params) : inp.params;
+        var params = mainReplace(pms, vars, methods);
+        if (!(Array.isArray(params))) {
+          params = [params];
+        }
+        params.unshift(vars, methods);
+        return methods[inp[FUNC_KEY]].apply(null, params);
+      }
+    }
+    return inp;
+  }
+
   function _noUndefined(st, def) {
     return st === undefined ? def : st;
   }
 
   function getVarVal(varVal, varName, variablesMap) {
-    if (typeof variablesMap !== 'object' || !variablesMap) {
-      return varVal;
+    if (variablesMap.hasOwnProperty(varName)) {
+      return variablesMap[varName];
     }
     if (varName.indexOf('.') !== -1) {
       var spls = varName.split('.'),
@@ -103,10 +128,11 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
         for (var j = 1; j < ln; j++) {
           if (spls[j].length) {
             if (typeof base === 'object') {
-              curVal = replace(spls[j], variablesMap);
+              curVal = (spls[j] === '$' && Array.isArray(base)) ?
+                getVarVal(spls[j], spls[j], variablesMap) : spls[j];
               try {
                 base = base[curVal];
-              } catch (erm) {
+              } catch (er) {
                 valFound = false;
               }
             } else {
@@ -122,68 +148,165 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
     return variablesMap.hasOwnProperty(varName) ? variablesMap[varName] : _noUndefined(varVal);
   }
 
-  function extractVars(str) {
-    return str.match(VAR_REG) || [];
+  function replaceVariable(str, varName, varValue) {
+    if (str === varName) return varValue;
+    var strType = typeof varValue === "string",
+      ln = str.length;
+    var patt = (strType || (str.indexOf(START_VAR) !== 0 || str.indexOf(END_VAR) !== (ln - EVAR_L))) ? varName : '"' + varName + '"';
+    var rValue = strType ? varValue : JSON.stringify(varValue);
+    return str.replace(patt, function() {
+      return rValue;
+    });
   }
 
   function extractVarName(variable) {
     return variable.substring(SVAR_L, variable.length - EVAR_L);
   }
 
-  function _replace(st, vars) {
-    var replaced, varName, nvars = extractVars(st),
-      reRep = false;
-    for (var i = 0; i < nvars.length; i++) {
-      varName = extractVarName(nvars[i]);
-      replaced = getVarVal(nvars[i], varName, vars);
-      if (st === nvars[i]) return replaced;
-      var rValue = (typeof replaced === 'string') ? replaced : JSON.stringify(replaced);
-      st = st.replace(nvars[i], function() {
-        return rValue;
-      });
+  function replaceVariables(str, vars, variablesMap, methodsMap) {
+    var varName, replaced, reReplaceRequired, res, ren, wasString;
+    for (var i = 0; i < vars.length; i++) {
+      varName = extractVarName(vars[i]);
+      reReplaceRequired = varName.indexOf('.$') !== -1;
+      replaced = getVarVal(vars[i], varName, variablesMap, methodsMap);
+      if (reReplaceRequired && (replaced !== vars[i])) {
+        wasString = typeof replaced === 'string';
+        replaced = mainReplace(replaced, variablesMap, methodsMap);
+        if (wasString && typeof replaced !== 'string') replaced = JSON.stringify(replaced);
+      }
+      str = replaceVariable(str, vars[i], replaced);
     }
-    return st;
+    return str;
   }
 
-  function replace(st, vars, ins) {
-    if (typeof st === 'string') {
-      if (typeof vars !== 'object' || !vars) {
-        return st;
-      }
-      if (!(Array.isArray(ins))) {
-        ins = isWithVars(st);
-      }
-      if (!(ins)) {
-        return st;
-      }
-      var reRep = (st.indexOf('.' + START_VAR) !== -1) && (st.indexOf(END_VAR + '.') !== -1);
-      st = _replace(st, vars);
-      if (reRep) {
-        st = _replace(st, vars);
-      }
-    }
-    return st;
-  }
-
-  function handleFunction(inp, vars, methods) {
-    if (typeof inp === 'object' && inp) {
-      if (typeof methods === 'object' && (typeof inp[FUNC_KEY] === 'string') &&
-        IS_ALPHA_NUM(inp[FUNC_KEY]) && (typeof methods[inp[FUNC_KEY]] === 'function')) {
-        var pms = (typeof inp.params === 'object' && inp.params !== null) ? ASSIGN(false, inp.params) : inp.params;
-        var params = deepReplace(pms, vars, methods);
-        if (!(Array.isArray(params))) {
-          params = [params];
+  function extractVars(str) {
+    var ar = str.match(VAR_REG) || [],
+      ln = ar.length;
+    for (var zi = 0, sps, sl; zi < ln; zi++) {
+      if (ar[zi].indexOf(END_VAR + START_VAR) !== -1) {
+        sps = ar[zi].split(END_VAR + START_VAR);
+        sl = sps.length;
+        for (var zj = 0; zj < sl; zj++) {
+          if (zj) {
+            if (zj === sl - 1) {
+              sps[zj] = START_VAR + sps[zj];
+            } else {
+              sps[zj] = START_VAR + sps[zj] + END_VAR;
+            }
+          } else {
+            sps[zj] += END_VAR;
+          }
         }
-        params.unshift(vars, methods);
-        return methods[inp[FUNC_KEY]].apply(null, params);
+        ar.splice.bind(ar, zi, 1).apply(ar, sps);
+        ln += sl - 1;
+        zi += sl - 1;
       }
     }
-    return inp;
+    return ar;
   }
 
-  function deepReplace(input, vars, methods) {
+  function extractMethods(str) {
+    return str.match(FUNC_REG) || [];
+  }
+
+  function extractMethodName(methodDec) {
+    return methodDec.substring(SVAR_L, methodDec.indexOf('('));
+  }
+
+  function extractParameters(str, methodName) {
+    var ar = [];
+    if (typeof str === 'string' && str.length) {
+      var chars = str.split(','),
+        cl = chars.length;
+      var pushInto = function(n) {
+        chars[n] = chars[n].trim();
+        var len = chars[n].length;
+        if (len >= 2 && ((chars[n].charAt(0) === "'" && chars[n].charAt(len - 1) === "'") ||
+            (chars[n].charAt(0) === '"' && chars[n].charAt(len - 1) === '"'))) {
+          chars[n] = '"' + chars[n].substring(1, len - 1).replace(/\"/g, '\\"') + '"';
+        }
+        try {
+          ar.push(JSON.parse(chars[n]));
+        } catch (er) {
+          ar.push(undefined);
+        }
+      };
+      for (var di, si, eg, fg, n = 0; n < cl; n++) {
+        eg = chars[n].charAt(0);
+        fg = chars[n].charAt(chars[n].length - 1);
+        if (!(eg === fg && (eg === '"' || eg === "'"))) {
+          chars[n] = chars[n].trim();
+          eg = chars[n].charAt(0);
+          fg = chars[n].charAt(chars[n].length - 1);
+        }
+        di = chars[n].indexOf('"');
+        si = chars[n].indexOf("'");
+        if (((si === -1) && (di === -1)) || (eg === fg && (eg === '"' || eg === "'")) ||
+          (chars[n].charAt(0) === "{" && chars[n].charAt(chars[n].length - 1) === "}" &&
+            (chars[n].match(/\{/g).length === chars[n].match(/\}/g).length)) ||
+          (chars[n].charAt(0) === "[" && chars[n].charAt(chars[n].length - 1) === "]" &&
+            (chars[n].match(/\[/g).length === chars[n].match(/\]/g).length))) {
+          pushInto(n);
+        } else if (n < (cl - 1)) {
+          chars[n] = chars[n] + ',' + chars[n + 1];
+          chars.splice(n + 1, 1);
+          n--;
+          cl--;
+          continue;
+        }
+      }
+    }
+    return ar;
+  }
+
+  function extractMethodParams(methodDec, methodName) {
+    var baseDec = methodDec.substring(methodName.length + SVAR_L + 1, methodDec.length - (EVAR_L + 1)).trim();
+    return extractParameters(baseDec, methodName);
+  }
+
+  function invokeMethod(method, params, methodName, methodsMap) {
+    try {
+      return method.apply(methodsMap, params);
+    } catch (eri) {
+      return 'HANDLER_ERROR';
+    }
+  }
+
+  function getMethodValue(methodDec, methodName, method, methodsMap) {
+    var methodParams = extractMethodParams(methodDec, methodName);
+    return invokeMethod(method, methodParams, methodName, methodsMap);
+  }
+
+  function replaceMethod(str, methodDec, methodName, method, methodsMap) {
+    var methodValue = getMethodValue(methodDec, methodName, method, methodsMap);
+    if (str === methodDec) return methodValue;
+    return str.replace(methodDec, function() {
+      return methodValue;
+    });
+  }
+
+  function replaceMethods(str, methods, methodsMap) {
+    var methodName = "";
+    for (var i = 0; i < methods.length; i++) {
+      methodName = extractMethodName(methods[i]);
+      if (typeof methodsMap[methodName] === 'function') {
+        str = replaceMethod(str, methods[i], methodName, methodsMap[methodName], methodsMap);
+      }
+    }
+    return str;
+  }
+
+  function replaceString(input, vars, methods) {
+    if (typeof input === 'string') {
+      input = replaceVariables(input, extractVars(input), vars, methods);
+    }
+    if (typeof input !== 'string') return input;
+    return replaceMethods(input, extractMethods(input), methods);
+  }
+
+  function mainReplace(input, vars, methods) {
     if (typeof input !== 'object' || !input) {
-      return replace(input, vars);
+      return replaceString(input, vars, methods);
     }
     input = handleFunction(input, vars, methods);
     WALK_INTO(function(valn, key, rt) {
@@ -192,7 +315,7 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
           tmpKy = null,
           isth = isWithVars(key);
         if (isth) {
-          tmpKy = replace(key, vars, isth);
+          tmpKy = replaceString(key, vars, methods);
           if (tmpKy !== key) {
             val = rt[tmpKy] = rt[key];
             delete rt[key];
@@ -201,7 +324,7 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
         if (typeof val === 'string' && val) {
           isth = isWithVars(val);
           if (isth) {
-            rt[tmpKy || key] = replace(val, vars, isth);
+            rt[tmpKy || key] = replaceString(val, vars, methods);
           }
         } else {
           rt[tmpKy || key] = handleFunction(val, vars, methods);
@@ -211,15 +334,32 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
     return input;
   }
 
-  return deepReplace;
+  return mainReplace;
 });
+var START_VAR = '\{\{',
+  END_VAR = '\}\}';
+var MainConfig = {
+  maxobjdepth: 99,
+  startvar: START_VAR,
+  endvar: END_VAR,
+  functionkey: '@',
+  walkendkey: '$W_END',
+  notfoundvalue: 'VAR_NOT_FOUND',
+  variableregex: new RegExp('\(' + START_VAR + '\[a-zA-Z0-9\\$\\.\_\]+' + END_VAR + '\)\+', 'g'),
+  functionregex: new RegExp('\(' + START_VAR + '\[a-zA-Z0-9\_\]+\\(\.\*\?\\)' + END_VAR + '\)\+', 'g')
+};
 
-var TEMPLIST = WRAP(0, {
-  objwalk: WALK,
-  isAlphaNum: IS_AN,
-  assign: ASSIGN
-});
-TEMPLIST.objwalk = WALK;
-TEMPLIST.isAlphaNum = IS_AN;
-TEMPLIST.assign = ASSIGN;
+var utils = {};
+
+utils.objwalk = WALK(MainConfig, utils);
+utils.objwalk.create = WALK;
+utils.isAlphaNum = IS_AN(MainConfig, utils);
+utils.isAlphaNum.create = IS_AN;
+utils.assign = ASSIGN(MainConfig, utils);
+utils.assign.create = ASSIGN;
+
+var TEMPLIST = WRAP(MainConfig, utils);
+TEMPLIST.config = MainConfig;
+TEMPLIST.utils = utils;
+TEMPLIST.create = WRAP;
 module.exports = TEMPLIST;

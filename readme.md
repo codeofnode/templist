@@ -25,6 +25,10 @@ templist({ "{{greet}}" : "{{whois}}" }, { greet : "hello", whois : { firstname: 
       --> { hello : { firstname: 'john' } }
 templist({ "{{greet}}" : { @ : 'getName' } }, { greet : "hello" }, { getName : function(){ return 'john' } })
       --> { hello : 'john' }
+
+//via calls () fashion
+templist({"gb{{1}}{{bm}}{{func(1,{{0}})}}":{"@":"func","params":true}},[3,9], {func:function(a,b){ return a+b; }})
+    ---> {'gb9{{bm}}4': '3,9[object Object]'}
 ```
 
 ## Want more example?
