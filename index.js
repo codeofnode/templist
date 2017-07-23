@@ -164,12 +164,11 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   }
 
   function replaceVariables(str, vars, variablesMap, methodsMap) {
-    var varName, replaced, reReplaceRequired, res, ren, wasString;
+    var varName, replaced, res, ren, wasString;
     for (var i = 0; i < vars.length; i++) {
       varName = extractVarName(vars[i]);
-      reReplaceRequired = varName.indexOf('.$') !== -1;
       replaced = getVarVal(vars[i], varName, variablesMap, methodsMap);
-      if (reReplaceRequired && (replaced !== vars[i])) {
+      if (replaced !== vars[i]) {
         wasString = typeof replaced === 'string';
         replaced = mainReplace(replaced, variablesMap, methodsMap);
         if (wasString && typeof replaced !== 'string') replaced = JSON.stringify(replaced);
@@ -297,7 +296,9 @@ var WRAP = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   }
 
   function replaceString(input, vars, methods) {
-    if (typeof input === 'string') {
+    var str;
+    while (typeof input === 'string' && str != input) {
+      str = input;
       input = replaceVariables(input, extractVars(input), vars, methods);
     }
     if (typeof input !== 'string') return input;
