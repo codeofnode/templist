@@ -58,7 +58,7 @@ var WALK = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
     const ob = ifEndForObjWalk(obj, depth);
     if (ob) {
       const kys = Object.keys(ob);
-      const lastln = kys.length;
+      const lastln = kys.length - 1;
       const deep = depth + 1;
       for (let z = 0; z <= lastln; z += 1) {
         walkInto(fun, ob, ob[kys[z]], kys[z], deep, (z === lastln));
