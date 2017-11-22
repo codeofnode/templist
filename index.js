@@ -48,7 +48,21 @@ var WALK = (function(GLOBAL_APP_CONFIG, GLOBAL_METHODS) {
   if (typeof ifEndForObjWalk !== 'function') {
     ifEndForObjWalk = function(obj, depth) {
       return ((depth < maxobjdepth && typeof obj === 'object' &&
-        obj !== null && obj[endvar] !== true) ? obj : false);
+        obj !== null && obj[endvar] !== true &&
+        (Array.isArray(obj) || isPOJO(obj))) ? obj : false);
+    };
+  };
+
+  let isPOJO = GLOBAL_METHODS && GLOBAL_METHODS.isPOJO;
+  if (typeof isPOJO !== 'function') {
+    const ProtoObj = Object.prototype;
+    const getProtOf = Object.getPrototypeOf;
+
+    isPOJO = function func(obj) {
+      if (obj === null || typeof obj !== 'object') {
+        return false;
+      }
+      return getProtOf(obj) === ProtoObj;
     };
   };
 
