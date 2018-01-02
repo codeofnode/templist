@@ -1,6 +1,6 @@
 {
   "name": "templist",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "The template master.",
   "repository": {
     "type": "git",
@@ -16,6 +16,9 @@
     "function",
     "dynamic"
   ],
+  "engines": {
+    "node": ">=0.10.48"
+  },
   "author": "Ramesh Kumar <codeofnode@gmail.com>",
   "license": "MIT",
   "bugs": {
